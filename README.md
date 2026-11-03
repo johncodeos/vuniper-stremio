@@ -190,7 +190,7 @@ test/           Offline tests
 | `/catalog/movie/streaming-soon.json` | Streaming Soon |
 | `/catalog/movie/hidden-gems.json` | Hidden Gems |
 | `/catalog/series/new-shows-seasons.json` | New Shows & Seasons |
-| `/poster/v1/{date}/{source-id}.jpg` | Poster with a streaming date ribbon |
+| `/poster/v3/{date}/{source-id}.jpg` | Poster with a streaming date ribbon |
 | `/health` | Process health; does not query Vuniper |
 
 Catalogs return up to 100 entries per page. Append `/skip=100.json`, `/skip=200.json`, and subsequent offsets to the catalog path for additional pages—for example, `/catalog/movie/movies-now-online/skip=100.json`.

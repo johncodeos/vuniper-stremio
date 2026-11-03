@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import { datedPosterPath, parsePosterPath, renderDatedPoster, createPosterService } from '../src/posters.js';
 
 const source = 'https://img.vuniper.com/posters-movies/m1dhdm6w_h5xkeyp2.jpg';
-const path = '/poster/v1/2026-11-06/m1dhdm6w_h5xkeyp2.jpg';
+const path = '/poster/v3/2026-11-06/m1dhdm6w_h5xkeyp2.jpg';
 const makeImage = () => sharp({ create: {
   width: 300, height: 450, channels: 3, background: '#ca6633',
 } }).png().toBuffer();
@@ -34,7 +34,7 @@ test('movie premieres and show seasons carry distinct ribbon labels and correct 
   assert.throws(() => datedPosterPath(showSource.replace('posters-shows', 'posters-movies'), '2026-11-02'));
   assert.throws(() => datedPosterPath(source, '2026-11-06', 'unknown'));
   const image = await makeImage();
-  const strip = { left: 0, top: 395, width: 300, height: 25 };
+  const strip = { left: 0, top: 380, width: 300, height: 25 };
   const renders = await Promise.all(['streaming', 'release', 'season'].map(async (ribbon) =>
     sharp(await renderDatedPoster(image, '2026-11-06', ribbon)).extract(strip).raw().toBuffer()));
   assert.notDeepEqual(renders[0], renders[1]);
@@ -52,10 +52,10 @@ test('renders a JPEG in poster proportions with visible date text and preserved 
   assert.ok(first.length < 100_000);
   const art = await sharp(first).extract({ left: 20, top: 20, width: 1, height: 1 }).raw().toBuffer();
   assert.ok(Math.abs(art[0] - 202) < 5);
-  const strip = await sharp(first).extract({ left: 5, top: 400, width: 290, height: 45 }).stats();
+  const strip = await sharp(first).extract({ left: 5, top: 384, width: 290, height: 45 }).stats();
   assert.ok(strip.channels[0].max > 230, 'Date strip should contain bright text.');
   assert.ok(strip.channels[0].min < 30, 'Date strip should have a dark background.');
-  const region = { left: 5, top: 418, width: 290, height: 28 };
+  const region = { left: 5, top: 402, width: 290, height: 28 };
   assert.notDeepEqual(
     await sharp(first).extract(region).raw().toBuffer(),
     await sharp(second).extract(region).raw().toBuffer(),

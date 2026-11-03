@@ -21,12 +21,12 @@ export function datedPosterPath(source, day, ribbon = 'streaming') {
   }
   const id = vuniper?.[2] ?? imdb?.[1];
   if (!id) throw new Error('Unsupported poster source.');
-  return ribbon === 'streaming' ? `/poster/v1/${day}/${id}.jpg`
+  return ribbon === 'streaming' ? `/poster/v3/${day}/${id}.jpg`
     : `/poster/v2/${ribbon}/${day}/${id}.jpg`;
 }
 
 export function parsePosterPath(path) {
-  const legacy = /^\/poster\/v1\/(\d{4}-\d{2}-\d{2})\/([ms][a-z0-9]{7}_h[a-z0-9]{7}|tt\d{7,})\.jpg$/.exec(path);
+  const legacy = /^\/poster\/v[13]\/(\d{4}-\d{2}-\d{2})\/([ms][a-z0-9]{7}_h[a-z0-9]{7}|tt\d{7,})\.jpg$/.exec(path);
   const labeled = /^\/poster\/v2\/(release|season)\/(\d{4}-\d{2}-\d{2})\/([ms][a-z0-9]{7}_h[a-z0-9]{7}|tt\d{7,})\.jpg$/.exec(path);
   if (!legacy && !labeled) return null;
   const [day, id] = legacy ? legacy.slice(1) : labeled.slice(2);
@@ -46,10 +46,10 @@ export async function renderDatedPoster(input, day, ribbon = 'streaming') {
   if (!Object.hasOwn(ribbons, ribbon)) throw new Error('Invalid ribbon label.');
   const date = dateFormat.format(new Date(`${day}T00:00:00Z`));
   const strip = Buffer.from(`<svg width="300" height="450" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="390" width="300" height="60" fill="#15131e"/>
-    <rect x="0" y="390" width="300" height="2" fill="#bdabf3"/>
-    <text x="150" y="414" text-anchor="middle" font-family="Arial, DejaVu Sans, sans-serif" font-size="11" font-weight="700" letter-spacing="2" fill="#c7b8ef">${ribbons[ribbon]}</text>
-    <text x="150" y="438" text-anchor="middle" font-family="Arial, DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#ffffff">${date}</text>
+    <rect x="0" y="374" width="300" height="76" fill="#15131e"/>
+    <rect x="0" y="374" width="300" height="2" fill="#bdabf3"/>
+    <text x="150" y="398" text-anchor="middle" font-family="Arial, DejaVu Sans, sans-serif" font-size="11" font-weight="700" letter-spacing="2" fill="#c7b8ef">${ribbons[ribbon]}</text>
+    <text x="150" y="422" text-anchor="middle" font-family="Arial, DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#ffffff">${date}</text>
   </svg>`);
   return sharp(input, { limitInputPixels: 20_000_000 })
     .rotate()
