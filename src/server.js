@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { findCatalog, CATALOG_PAGE_SIZE, createCatalogService, manifest } from './catalog.js';
+import { addPreviewLinks } from './metadata.js';
 import { createPosterService, datedPosterPath, parsePosterPath } from './posters.js';
 
 function reply(res, status, body, head = false) {
@@ -11,6 +12,8 @@ export function createAddonServer({
   service = createCatalogService(),
   posterService = createPosterService(),
   publicUrl,
+  accounts,
+  enrichPreviews = async (metas) => metas.map((meta) => addPreviewLinks(meta)),
   logger = console,
 } = {}) {
   let publicOrigin;
@@ -31,6 +34,13 @@ export function createAddonServer({
     res.setHeader('Expires', '0');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     const head = req.method === 'HEAD';
+    const url = new URL(req.url, 'http://localhost');
+    try {
+      if (await accounts?.handle(req, res, url.pathname)) return;
+    } catch {
+      res.writeHead(500).end('Could not process settings.');
+      return;
+    }
     const json = (status, body) => reply(res, status, body, head);
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
     if (req.method !== 'GET' && !head) {
@@ -40,19 +50,27 @@ export function createAddonServer({
     }
 
     try {
-      const url = new URL(req.url, 'http://localhost');
-      if (url.pathname === '/manifest.json') { json(200, manifest); return; }
-      if (url.pathname === '/health') { json(200, { ok: true }); return; }
+      const account = url.pathname.startsWith('/install/') ? await accounts?.resolve(url.pathname) : null;
+      const pathname = account?.pathname ?? url.pathname;
+      if (account && pathname === '/configure') {
+        res.writeHead(302, { Location: `/configure/${account.id}`, 'Referrer-Policy': 'no-referrer' }).end();
+        return;
+      }
+      if (pathname === '/manifest.json') {
+        json(200, accounts ? { ...manifest, behaviorHints: { ...manifest.behaviorHints, configurable: true } } : manifest);
+        return;
+      }
+      if (pathname === '/health') { json(200, { ok: true }); return; }
 
-      if (url.pathname.startsWith('/poster/')) {
-        if (!parsePosterPath(url.pathname)) { json(404, { error: 'Not found.' }); return; }
-        const image = await posterService.getPoster(url.pathname);
+      if (pathname.startsWith('/poster/')) {
+        if (!parsePosterPath(pathname)) { json(404, { error: 'Not found.' }); return; }
+        const image = await posterService.getPoster(pathname);
         res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': image.length });
         res.end(head ? undefined : image);
         return;
       }
 
-      const catalogRoute = /^\/catalog\/(movie|series)\/([^/]+?)(?:\/([^/]+))?\.json$/.exec(url.pathname);
+      const catalogRoute = /^\/catalog\/(movie|series)\/([^/]+?)(?:\/([^/]+))?\.json$/.exec(pathname);
       if (catalogRoute && findCatalog(catalogRoute[2], catalogRoute[1])) {
         const [, , catalogId, extra = ''] = catalogRoute;
         const parameters = new URLSearchParams(extra);
@@ -66,11 +84,12 @@ export function createAddonServer({
         const { entries, fetchedAt } = await service.getSnapshot(catalogId, skip + CATALOG_PAGE_SIZE);
         const origin = publicOrigin ?? `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`;
         res.setHeader('X-Catalog-Fetched-At', fetchedAt);
+        const metas = entries.slice(skip, skip + CATALOG_PAGE_SIZE).map(({ meta, releaseDate, ribbon }) => ({
+          ...meta,
+          poster: ribbon ? new URL(datedPosterPath(meta.poster, releaseDate, ribbon), origin).href : meta.poster,
+        }));
         json(200, {
-          metas: entries.slice(skip, skip + CATALOG_PAGE_SIZE).map(({ meta, releaseDate, ribbon }) => ({
-            ...meta,
-            poster: ribbon ? new URL(datedPosterPath(meta.poster, releaseDate, ribbon), origin).href : meta.poster,
-          })),
+          metas: head ? [] : await enrichPreviews(metas, account),
           cacheMaxAge: 0,
           staleRevalidate: 0,
           staleError: 0,

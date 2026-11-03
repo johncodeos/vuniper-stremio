@@ -5,7 +5,7 @@ export const CATALOG_ID = 'streaming-soon';
 export const CATALOG_PAGE_SIZE = 100;
 export const CATALOGS = [
   {
-    id: 'movies-now-online', name: 'Movies Now Online', type: 'movie', mediaType: 'movies',
+    id: 'movies-now-online', name: 'Now Streaming', type: 'movie', mediaType: 'movies',
     section: 'web', dateField: 'web', ribbon: null, dateLabel: 'Streaming', order: 'desc',
   },
   {
@@ -30,7 +30,7 @@ export const manifest = {
   version: '0.4.4',
   name: 'Vuniper',
   logo: 'https://vuniper.com/icons/icon-192x192.png',
-  description: 'Movies Now Online, Streaming Soon, Hidden Gems, and New Shows & Seasons from Vuniper. Date ribbons on Streaming Soon posters. Fresh data on each catalog request. Unofficial add-on.',
+  description: 'Find out what’s streaming now and what’s coming soon, discover hidden gems, and keep up with new shows and seasons. Upcoming movie posters show when each title starts streaming. An unofficial Stremio add-on powered by Vuniper.',
   resources: ['catalog'],
   types: ['movie', 'series'],
   catalogs: CATALOGS.map(({ id, name, type }) => ({

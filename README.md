@@ -34,7 +34,7 @@ The catalogs appear in this order within Vuniper:
 
 | Catalog | Order | Posters |
 | --- | --- | --- |
-| **Movies Now Online** | Newest streaming release first | Original artwork |
+| **Now Streaming** | Newest streaming release first | Original artwork |
 | **Streaming Soon** | Nearest streaming release first | **STREAMING** ribbon with the release date |
 | **Hidden Gems** | Newest streaming release first, using Vuniper's selections | Original artwork |
 | **New Shows & Seasons** | Most recent show or season start first | Original artwork |
@@ -56,9 +56,9 @@ Captured in Stremio Web. Only the website content is shown; titles and dates ref
 
 ### Board
 
-Movies Now Online appears first, followed by Streaming Soon with its release-date ribbons.
+Now Streaming appears first, followed by Streaming Soon with its release-date ribbons.
 
-![Vuniper on the Stremio Board, with Movies Now Online above Streaming Soon](docs/screenshots/board.jpg)
+![Vuniper on the Stremio Board, with the first movie catalog above Streaming Soon](docs/screenshots/board.jpg)
 
 <details>
 <summary><strong>Explore the Discover views</strong></summary>
@@ -116,9 +116,9 @@ For a TV, phone, or another computer, use a reachable HTTPS deployment. `127.0.0
 
 Refresh Stremio to load updated movie lists and posters. When an update changes the available catalogs, their order, or add-on branding, remove the installed Vuniper entry and install the same manifest URL again.
 
-**Movies Now Online** is Vuniper's first catalog. To place Vuniper above other providers on the Board, reorder your installed add-ons in Stremio. An unofficial utility such as [Stremio Addon Manager](https://stremio-addon-manager.vercel.app/) can do this, including moving Vuniper above Cinemeta; it requires access to your Stremio account.
+**Now Streaming** is Vuniper's first catalog. To place Vuniper above other providers on the Board, reorder your installed add-ons in Stremio. An unofficial utility such as [Stremio Addon Manager](https://stremio-addon-manager.vercel.app/) can do this, including moving Vuniper above Cinemeta; it requires access to your Stremio account.
 
-With Vuniper first, Movies Now Online is the first movie catalog for a fresh Discover selection. A previously selected catalog URL can still preserve another choice. For direct access in Stremio Web, bookmark [Movies Now Online](https://web.stremio.com/#/discover/http%3A%2F%2F127.0.0.1%3A7000%2Fmanifest.json/movie/movies-now-online).
+With Vuniper first, Now Streaming is the first movie catalog for a fresh Discover selection. A previously selected catalog URL can still preserve another choice. For direct access in Stremio Web, bookmark [Now Streaming](https://web.stremio.com/#/discover/http%3A%2F%2F127.0.0.1%3A7000%2Fmanifest.json/movie/movies-now-online).
 
 ## Configuration
 
@@ -186,7 +186,7 @@ test/           Offline tests
 | Path | Purpose |
 | --- | --- |
 | `/manifest.json` | Add-on identity and catalog definitions |
-| `/catalog/movie/movies-now-online.json` | Movies Now Online |
+| `/catalog/movie/movies-now-online.json` | Now Streaming |
 | `/catalog/movie/streaming-soon.json` | Streaming Soon |
 | `/catalog/movie/hidden-gems.json` | Hidden Gems |
 | `/catalog/series/new-shows-seasons.json` | New Shows & Seasons |
@@ -197,7 +197,7 @@ Catalogs return up to 100 entries per page. Append `/skip=100.json`, `/skip=200.
 
 ### Source behavior
 
-The integration uses Vuniper's internal website API. Movies Now Online, Hidden Gems, and New Shows & Seasons start from the same curated initial feeds as the website, then paginate with their original date cursors. Streaming Soon is read in full; the other feeds load the prefix needed for the requested Stremio page.
+The integration uses Vuniper's internal website API. Now Streaming, Hidden Gems, and New Shows & Seasons start from the same curated initial feeds as the website, then paginate with their original date cursors. Streaming Soon is read in full; the other feeds load the prefix needed for the requested Stremio page.
 
 Movie streaming catalogs use the `web` date. The series catalog uses `last_season_date`. Dates are displayed as calendar dates rather than precise release times. Incomplete records are omitted and counted in the server log, and duplicate IMDb IDs are removed within each catalog.
 

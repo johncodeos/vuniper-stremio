@@ -26,7 +26,7 @@ test('serves an installable manifest and paginates 100 movies without caching', 
     assert.equal(manifest.name, 'Vuniper');
     assert.equal(manifest.logo, 'https://vuniper.com/icons/icon-192x192.png');
     assert.deepEqual(manifest.types, ['movie', 'series']);
-    assert.deepEqual(manifest.catalogs.map(({ name }) => name), ['Movies Now Online', 'Streaming Soon', 'Hidden Gems', 'New Shows & Seasons']);
+    assert.deepEqual(manifest.catalogs.map(({ name }) => name), ['Now Streaming', 'Streaming Soon', 'Hidden Gems', 'New Shows & Seasons']);
     assert.deepEqual(manifest.resources, ['catalog']);
     assert.equal(manifest.catalogs[0].extra[0].name, 'skip');
     assert.equal(manifest.catalogs[0].extra[0].isRequired, false);
@@ -144,4 +144,35 @@ test('returns an uncached 502 on source failure and recovers on the next request
     assert.equal(recovered.status, 200);
     assert.equal((await recovered.json()).metas.length, 1);
   });
+});
+
+test('catalog previews expose IMDb and cast links with the Vuniper date, even when metadata is unavailable', async () => {
+  const { createMetadataService } = await import('../src/metadata.js');
+  const source = [
+    { ...movies[0], genres: 'Drama', actors: 'Source Actor' },
+    { ...movies[1], actors: 'Fallback Actor' },
+  ];
+  const service = createCatalogService({ loadItems: async () => source });
+  const enrichPreviews = createMetadataService({
+    fetchImpl: async (url) => {
+      if (url.endsWith('/tt0000001.json')) return new Response(null, { status: 503 });
+      return Response.json({ meta: {
+        id: 'tt0000000', type: 'movie', cast: ['Example Actor'], imdbRating: '7.4',
+      } });
+    },
+  });
+  const server = createAddonServer({ service, enrichPreviews, logger: quiet });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const { metas: [enriched, fallback] } = await (await fetch(`${base}${catalogUrl}.json`)).json();
+    assert.match(enriched.description, /^Streaming: 6 November 2026/);
+    assert.deepEqual(enriched.links.map(({ category, name }) => [category, name]), [
+      ['imdb', '7.4'], ['Genres', 'Drama'], ['Cast', 'Example Actor'],
+    ]);
+    assert.equal(fallback.links[0].name, 'Fallback Actor');
+    assert.equal(fallback.imdbRating, undefined);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
