@@ -1,0 +1,20 @@
+{
+  "name": "vuniper-stremio",
+  "version": "0.4.4",
+  "private": true,
+  "description": "Vuniper movie and series catalogs for Stremio, with release dates on posters.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test",
+    "check:live": "node scripts/check-live.js"
+  },
+  "dependencies": {
+    "he": "^2.0.0",
+    "sharp": "^0.35.5"
+  }
+}
