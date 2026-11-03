@@ -17,6 +17,7 @@
 
 <p align="center">
   <a href="#catalogs">Catalogs</a> ·
+  <a href="#screenshots">Screenshots</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#install-in-stremio">Installation</a> ·
   <a href="#hosting">Hosting</a> ·
@@ -48,6 +49,33 @@ Only **Streaming Soon** has a date ribbon. New Shows & Seasons uses the latest s
 - IMDb IDs preserve compatibility with Cinemeta and other add-ons.
 
 Release dates and catalog membership come from Vuniper and may change.
+
+## Screenshots
+
+Captured in Stremio Web. Only the website content is shown; titles and dates reflect the catalog at the time of capture.
+
+### Board
+
+Movies Now Online appears first, followed by Streaming Soon with its release-date ribbons.
+
+![Vuniper on the Stremio Board, with Movies Now Online above Streaming Soon](docs/screenshots/board.jpg)
+
+<details>
+<summary><strong>Explore the Discover views</strong></summary>
+
+### Streaming Soon
+
+Browse upcoming streaming releases with the date visible on each poster.
+
+![Streaming Soon in Stremio Discover, showing streaming release dates on the posters](docs/screenshots/streaming-soon.jpg)
+
+### New Shows & Seasons
+
+Browse new and returning series with their original posters, without date ribbons.
+
+![New Shows and Seasons in Stremio Discover, showing original series posters without ribbons](docs/screenshots/new-shows-seasons.jpg)
+
+</details>
 
 ## Quick start
 
