@@ -13,13 +13,23 @@ function searchLinks(category, names) {
   }));
 }
 
+function formatRuntime(runtime) {
+  const match = /^(?:(\d+)h\s*)?(?:(\d+)\s*m(?:in)?)?$/i.exec(runtime ?? '');
+  if (!match || (!match[1] && !match[2])) return runtime;
+
+  const totalMinutes = Number(match[1] ?? 0) * 60 + Number(match[2] ?? 0);
+  const hours = Math.floor(totalMinutes / 60);
+  return `${hours ? `${hours}h` : ''}${totalMinutes % 60}min`;
+}
+
 export function addPreviewLinks(meta, details) {
   const cast = details?.cast?.length ? details.cast : meta.cast;
   const overview = typeof details?.overview === 'string' ? details.overview.trim() : '';
+  const runtime = formatRuntime(details?.runtime || meta.runtime);
   meta = {
     ...meta,
     description: overview || meta.description,
-    ...(details?.runtime && { runtime: details.runtime }),
+    ...(runtime && { runtime }),
     ...(details?.releaseInfo && { releaseInfo: details.releaseInfo }),
     ...(details?.background && { background: details.background }),
   };

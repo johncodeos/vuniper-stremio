@@ -150,7 +150,7 @@ test('catalog previews expose IMDb and cast links even when metadata is unavaila
   const { createMetadataService } = await import('../src/metadata.js');
   const source = [
     { ...movies[0], genres: 'Drama', actors: 'Source Actor', description: 'Original synopsis.' },
-    { ...movies[1], actors: 'Fallback Actor' },
+    { ...movies[1], actors: 'Fallback Actor', runtime: '2h 1m' },
   ];
   const service = createCatalogService({ loadItems: async () => source });
   const enrichPreviews = createMetadataService({
@@ -173,6 +173,7 @@ test('catalog previews expose IMDb and cast links even when metadata is unavaila
     ]);
     assert.equal(fallback.links[0].name, 'Fallback Actor');
     assert.equal(fallback.imdbRating, undefined);
+    assert.equal(fallback.runtime, '2h1min');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
