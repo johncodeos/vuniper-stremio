@@ -59,18 +59,28 @@ test('TMDB and TheTVDB enrich previews with provider synopses or inventing IMDb 
   assert.equal(urls.length, 5);
 });
 
-test('provider overview preserves Cinemeta cast when provider credits are missing', async () => {
+test('provider overview preserves Cinemeta display metadata when provider credits are missing', async () => {
   const enrich = createMetadataService({
     settings: { imdb: true, tmdbToken: 'test-tmdb-token' },
     fetchImpl: async (url) => {
       if (url.includes('cinemeta')) {
-        return Response.json({ meta: { id: 'tt1234567', type: 'movie', cast: ['Fallback Actor'] } });
+        return Response.json({ meta: {
+          id: 'tt1234567', type: 'movie', cast: ['Fallback Actor'],
+          runtime: '96 min', releaseInfo: '2026', background: 'https://example.com/backdrop.jpg',
+          poster: 'https://example.com/cinemeta-poster.jpg',
+        } });
       }
       if (url.includes('/find/')) return Response.json({ movie_results: [{ id: 42 }] });
       return Response.json({ overview: 'Provider overview', credits: { cast: [] } });
     },
   });
-  const [preview] = await enrich([{ type: 'movie', id: 'tt1234567', description: 'Original synopsis.' }]);
+  const [preview] = await enrich([{ type: 'movie', id: 'tt1234567', description: 'Original synopsis.',
+    runtime: '1h 36m', releaseInfo: '2025', poster: 'https://example.com/vuniper-poster.jpg',
+  }]);
   assert.match(preview.description, /Provider overview/);
   assert.deepEqual(preview.cast, ['Fallback Actor']);
+  assert.equal(preview.runtime, '96 min');
+  assert.equal(preview.releaseInfo, '2026');
+  assert.equal(preview.background, 'https://example.com/backdrop.jpg');
+  assert.equal(preview.poster, 'https://example.com/vuniper-poster.jpg');
 });

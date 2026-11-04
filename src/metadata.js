@@ -16,7 +16,13 @@ function searchLinks(category, names) {
 export function addPreviewLinks(meta, details) {
   const cast = details?.cast?.length ? details.cast : meta.cast;
   const overview = typeof details?.overview === 'string' ? details.overview.trim() : '';
-  meta = { ...meta, description: overview || meta.description };
+  meta = {
+    ...meta,
+    description: overview || meta.description,
+    ...(details?.runtime && { runtime: details.runtime }),
+    ...(details?.releaseInfo && { releaseInfo: details.releaseInfo }),
+    ...(details?.background && { background: details.background }),
+  };
   const director = details?.director?.length ? details.director : meta.director;
   const rating = details?.imdbRating;
   const links = [
@@ -57,7 +63,15 @@ export function createMetadataService({ fetchImpl = fetch, settings = { imdb: tr
           if (response.ok) {
             const { meta } = await response.json();
             if (meta?.id === id && meta.type === type) {
-              details = { cast: names(meta.cast), director: names(meta.director), imdbRating: meta.imdbRating };
+              details = {
+                cast: names(meta.cast),
+                director: names(meta.director),
+                imdbRating: meta.imdbRating,
+                runtime: typeof meta.runtime === 'string' ? meta.runtime.trim() : undefined,
+                releaseInfo: typeof meta.releaseInfo === 'string' ? meta.releaseInfo.trim() : undefined,
+                background: typeof meta.background === 'string' && /^https?:\/\//i.test(meta.background)
+                  ? meta.background : undefined,
+              };
             }
           }
         }

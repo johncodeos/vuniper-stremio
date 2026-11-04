@@ -42,7 +42,7 @@ function providerFields(settings = {}) {
     ${settings[name] ? `Saved <label><input type="checkbox" name="clear-${name}"> Remove</label>` : ''}${keyLink(name)}
     ${name === 'tvdbPin' ? '' : `<button class="secondary" type="button" data-test-provider="${name === 'tmdbToken' ? 'tmdb' : 'tvdb'}">Test ${name === 'tmdbToken' ? 'TMDB' : 'TheTVDB'} key</button>`}</div>`)
     .join('') + `<p><label class="choice"><input type="checkbox" name="imdb"${settings.imdb ? ' checked' : ''}>
-      Use Cinemeta for IMDb ratings and fallback credits</label></p><p role="status" data-test-status></p>`;
+      Use Cinemeta for IMDb ratings, credits, runtime, year, and backdrop</label></p><p role="status" data-test-status></p>`;
 }
 
 export function createAccounts(directory, publicUrl, { secrets, testCredentials = testProviderCredentials } = {}) {
