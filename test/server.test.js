@@ -67,6 +67,13 @@ test('serves dated poster images and uses the public HTTPS origin behind a proxy
     const catalog = await (await fetch(`${base}${catalogUrl}.json`)).json();
     const posterUrl = new URL(catalog.metas[0].poster);
     assert.equal(posterUrl.origin, 'https://addon.example.com');
+    const backdropUrl = new URL(catalog.metas[0].background);
+    assert.equal(backdropUrl.origin, posterUrl.origin);
+    const backdrop = await fetch(`${base}${backdropUrl.pathname}`);
+    assert.equal(backdrop.status, 200);
+    assert.equal(backdrop.headers.get('content-type'), 'image/png');
+    assert.match(backdrop.headers.get('cache-control'), /immutable/);
+    assert.equal((await backdrop.arrayBuffer()).byteLength, Number(backdrop.headers.get('content-length')));
     const response = await fetch(`${base}${posterUrl.pathname}`);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-type'), 'image/jpeg');

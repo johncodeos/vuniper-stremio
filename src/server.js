@@ -3,6 +3,13 @@ import { findCatalog, CATALOG_PAGE_SIZE, MAX_CATALOG_SKIP, createCatalogService,
 import { addPreviewLinks } from './metadata.js';
 import { createPosterService, datedPosterPath, parsePosterPath } from './posters.js';
 
+const BLANK_BACKDROP_PATH = '/art/blank-backdrop.png';
+// A solid black 16:9 PNG shared by every preview.
+const blankBackdrop = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAIAAAC0SDtlAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADklEQVQYlWNgGAVDEgAAAbkAAfAQZ1MAAAAASUVORK5CYII=',
+  'base64',
+);
+
 function reply(res, status, body, head = false) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(head ? undefined : JSON.stringify(body));
@@ -68,6 +75,18 @@ export function createAddonServer({
         return;
       }
 
+      if (pathname === BLANK_BACKDROP_PATH) {
+        res.removeHeader('Pragma');
+        res.removeHeader('Expires');
+        res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Content-Length': blankBackdrop.length,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        });
+        res.end(head ? undefined : blankBackdrop);
+        return;
+      }
+
       if (pathname.startsWith('/poster/')) {
         if (!parsePosterPath(pathname)) { json(404, { error: 'Not found.' }); return; }
         const image = await posterService.getPoster(pathname);
@@ -92,8 +111,10 @@ export function createAddonServer({
         const origin = publicOrigin ?? `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`;
         res.setHeader('X-Catalog-Fetched-At', fetchedAt);
         res.setHeader('X-Catalog-Stale', String(Boolean(stale)));
+        const background = new URL(BLANK_BACKDROP_PATH, origin).href;
         const metas = entries.slice(skip, skip + CATALOG_PAGE_SIZE).map(({ meta, releaseDate, ribbon }) => ({
           ...meta,
+          background,
           poster: ribbon ? new URL(datedPosterPath(meta.poster, releaseDate, ribbon), origin).href : meta.poster,
         }));
         json(200, {
