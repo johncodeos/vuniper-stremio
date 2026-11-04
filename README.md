@@ -100,7 +100,7 @@ Enable persistent settings as described under [Hosting](#hosting), then open `/c
 | --- | --- |
 | **TMDB** | Movie synopses and credits. Use a TMDB Read Access Token. |
 | **TheTVDB** | Series synopses and credits. Use a TheTVDB API key and, if your key requires one, a subscriber PIN. |
-| **Cinemeta** | IMDb ratings, fallback credits, runtime, release year, and backdrop. Enable it with the checkbox. |
+| **Cinemeta** | IMDb ratings, fallback credits, runtime, and release year. Enable it with the checkbox. |
 
 Use **Test TMDB key** or **Test TheTVDB key** to check credentials before saving. Choose a settings password of at least 12 characters, then select **Generate install link**. Install directly from the result page or copy its manifest URL into Stremio.
 

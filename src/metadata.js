@@ -31,7 +31,6 @@ export function addPreviewLinks(meta, details) {
     description: overview || meta.description,
     ...(runtime && { runtime }),
     ...(details?.releaseInfo && { releaseInfo: details.releaseInfo }),
-    ...(details?.background && { background: details.background }),
   };
   const director = details?.director?.length ? details.director : meta.director;
   const rating = details?.imdbRating;
@@ -79,8 +78,6 @@ export function createMetadataService({ fetchImpl = fetch, settings = { imdb: tr
                 imdbRating: meta.imdbRating,
                 runtime: typeof meta.runtime === 'string' ? meta.runtime.trim() : undefined,
                 releaseInfo: typeof meta.releaseInfo === 'string' ? meta.releaseInfo.trim() : undefined,
-                background: typeof meta.background === 'string' && /^https?:\/\//i.test(meta.background)
-                  ? meta.background : undefined,
               };
             }
           }

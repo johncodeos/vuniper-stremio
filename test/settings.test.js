@@ -81,6 +81,6 @@ test('provider overview preserves Cinemeta display metadata when provider credit
   assert.deepEqual(preview.cast, ['Fallback Actor']);
   assert.equal(preview.runtime, '1h36min');
   assert.equal(preview.releaseInfo, '2026');
-  assert.equal(preview.background, 'https://example.com/backdrop.jpg');
+  assert.equal(preview.background, undefined);
   assert.equal(preview.poster, 'https://example.com/vuniper-poster.jpg');
 });
