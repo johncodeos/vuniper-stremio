@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildEntries, createCatalogService, calendarDate, findCatalog } from '../src/catalog.js';
@@ -31,8 +31,7 @@ test('decodes titles and descriptions, preserves IMDb identity, and maps source 
   assert.equal(meta.name, 'A Dog\'s "Perfect" Christmas');
   assert.equal(meta.id, 'tt32767134');
   assert.equal(meta.poster, 'https://img.vuniper.com/posters-movies/m1dhdm6w_h5xkeyp2.jpg');
-  assert.match(meta.description, /^Streaming: 6 November 2026/);
-  assert.match(meta.description, /Family & friends 🍿/);
+  assert.equal(meta.description, 'Family & friends 🍿');
   assert.deepEqual(meta.genres, ['Horror', 'Drama']);
 });
 
@@ -70,7 +69,7 @@ test('New Shows & Seasons opens series metadata and uses the latest season rathe
   assert.equal(entry.meta.id, 'tt36153709');
   assert.equal(entry.meta.releaseInfo, '2024-');
   assert.equal(entry.meta.poster, 'https://img.vuniper.com/posters-shows/s9p3uzzw_h94m09i1.jpg');
-  assert.match(entry.meta.description, /^New show \/ season: 2 November 2026/);
+  assert.equal(entry.meta.description, '');
 });
 
 test('the show catalog passes its media type and latest season cursor to pagination', async () => {
@@ -147,7 +146,7 @@ test('persistent catalog snapshots survive restart and expire after an upstream 
   const loadItems = async () => {
     calls++;
     if (unavailable) throw new Error('Upstream unavailable');
-    return [movie()];
+    return [movie({ description: 'Original synopsis.' })];
   };
   const options = { stateDirectory, now: () => now, loadItems, logger: quiet };
   try {
@@ -156,6 +155,9 @@ test('persistent catalog snapshots survive restart and expire after an upstream 
     assert.deepEqual(await service.getSnapshot(), first);
     assert.equal(calls, 1);
 
+    const legacy = structuredClone(first);
+    legacy.entries[0].meta.description = 'Streaming: 6 November 2026 (Vuniper).\n\nOriginal synopsis.';
+    await writeFile(join(stateDirectory, 'catalog-streaming-soon.json'), JSON.stringify(legacy));
     const restarted = createCatalogService(options);
     assert.deepEqual(await restarted.getSnapshot(), first);
     assert.equal(calls, 1);

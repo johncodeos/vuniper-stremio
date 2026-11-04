@@ -16,10 +16,7 @@ function searchLinks(category, names) {
 export function addPreviewLinks(meta, details) {
   const cast = details?.cast?.length ? details.cast : meta.cast;
   const overview = typeof details?.overview === 'string' ? details.overview.trim() : '';
-  const description = overview
-    ? [meta.description?.split('\n\n')[0], overview].filter(Boolean).join('\n\n')
-    : meta.description;
-  meta = { ...meta, description };
+  meta = { ...meta, description: overview || meta.description };
   const director = details?.director?.length ? details.director : meta.director;
   const rating = details?.imdbRating;
   const links = [

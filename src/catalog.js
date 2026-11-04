@@ -8,20 +8,20 @@ export const CATALOG_PAGE_SIZE = 100;
 export const CATALOGS = [
   {
     id: 'movies-now-online', name: 'Now Streaming', type: 'movie', mediaType: 'movies',
-    section: 'web', dateField: 'web', ribbon: null, dateLabel: 'Streaming', order: 'desc',
+    section: 'web', dateField: 'web', ribbon: null, order: 'desc',
   },
   {
     id: CATALOG_ID, name: 'Streaming Soon', type: 'movie', mediaType: 'movies',
-    section: 'soon', dateField: 'web', ribbon: 'streaming', dateLabel: 'Streaming',
+    section: 'soon', dateField: 'web', ribbon: 'streaming',
     order: 'asc', readAll: true, alphabeticalTies: true,
   },
   {
     id: 'hidden-gems', name: 'Hidden Gems', type: 'movie', mediaType: 'movies',
-    section: 'gems', dateField: 'web', ribbon: null, dateLabel: 'Streaming', order: 'desc',
+    section: 'gems', dateField: 'web', ribbon: null, order: 'desc',
   },
   {
     id: 'new-shows-seasons', name: 'New Shows & Seasons', type: 'series', mediaType: 'shows',
-    section: 'new', dateField: 'last_season_date', ribbon: null, dateLabel: 'New show / season', order: 'desc',
+    section: 'new', dateField: 'last_season_date', ribbon: null, order: 'desc',
   },
 ];
 export const findCatalog = (id, type) => CATALOGS.find((catalog) => catalog.id === id
@@ -47,9 +47,6 @@ export const manifest = {
 const text = (value) => typeof value === 'string' ? decode(value).trim() : '';
 const list = (value) => typeof value === 'string'
   ? value.split(',').map(text).filter(Boolean) : [];
-const dateFormat = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-});
 
 export function calendarDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/.test(value)) return null;
@@ -64,7 +61,6 @@ export function buildEntries(items, {
   type = 'movie',
   dateField = 'web',
   ribbon = 'streaming',
-  dateLabel = 'Streaming',
   alphabeticalTies = order === 'asc',
 } = {}) {
   const entries = [];
@@ -84,7 +80,7 @@ export function buildEntries(items, {
       name,
       poster,
       posterShape: 'poster',
-      description: `${dateLabel}: ${dateFormat.format(new Date(`${day}T00:00:00Z`))} (Vuniper).${text(item.description) ? `\n\n${text(item.description)}` : ''}`,
+      description: text(item.description),
       genres: list(item.genres),
       cast: list(item.actors),
       director: list(item.director),
@@ -129,6 +125,13 @@ export function createCatalogService({ loadItems = fetchItems, logger = console,
     try {
       const snapshot = JSON.parse(await readFile(join(stateDirectory, `catalog-${id}.json`), 'utf8'));
       if (Array.isArray(snapshot.entries) && Number.isFinite(Date.parse(snapshot.fetchedAt))) {
+        // Snapshots written by older releases included a date before the synopsis.
+        for (const { meta } of snapshot.entries) {
+          meta.description = meta.description?.replace(
+            /^(?:Streaming|New show \/ season): \d{1,2} [A-Za-z]+ \d{4} \(Vuniper\)\.(?:\n\n|$)/,
+            '',
+          );
+        }
         if (!snapshots.has(id)) snapshots.set(id, snapshot);
         return snapshots.get(id);
       }

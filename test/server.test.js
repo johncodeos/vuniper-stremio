@@ -146,10 +146,10 @@ test('returns an uncached 502 on source failure and recovers on the next request
   });
 });
 
-test('catalog previews expose IMDb and cast links with the Vuniper date, even when metadata is unavailable', async () => {
+test('catalog previews expose IMDb and cast links even when metadata is unavailable', async () => {
   const { createMetadataService } = await import('../src/metadata.js');
   const source = [
-    { ...movies[0], genres: 'Drama', actors: 'Source Actor' },
+    { ...movies[0], genres: 'Drama', actors: 'Source Actor', description: 'Original synopsis.' },
     { ...movies[1], actors: 'Fallback Actor' },
   ];
   const service = createCatalogService({ loadItems: async () => source });
@@ -166,7 +166,8 @@ test('catalog previews expose IMDb and cast links with the Vuniper date, even wh
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
     const { metas: [enriched, fallback] } = await (await fetch(`${base}${catalogUrl}.json`)).json();
-    assert.match(enriched.description, /^Streaming: 6 November 2026/);
+    assert.equal(enriched.description, 'Original synopsis.');
+    assert.equal(parsePosterPath(new URL(enriched.poster).pathname).day, '2026-11-06');
     assert.deepEqual(enriched.links.map(({ category, name }) => [category, name]), [
       ['imdb', '7.4'], ['Genres', 'Drama'], ['Cast', 'Example Actor'],
     ]);

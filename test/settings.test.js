@@ -30,7 +30,7 @@ test('private settings reject anonymous and forged requests and persist credenti
   }
 });
 
-test('TMDB and TheTVDB enrich previews without replacing the Vuniper date or inventing IMDb scores', async () => {
+test('TMDB and TheTVDB enrich previews with provider synopses or inventing IMDb scores', async () => {
   const urls = [];
   const enrich = createMetadataService({
     settings: { tmdbToken: 'tmdb-token', tvdbKey: 'tvdb-key' },
@@ -49,12 +49,12 @@ test('TMDB and TheTVDB enrich previews without replacing the Vuniper date or inv
     },
   });
   const previews = await enrich([
-    { type: 'movie', id: 'tt0000001', description: 'Streaming: 6 November 2026\n\nOriginal' },
-    { type: 'series', id: 'tt0000002', description: 'New show / season: 6 November 2026\n\nOriginal' },
+    { type: 'movie', id: 'tt0000001', description: 'Original' },
+    { type: 'series', id: 'tt0000002', description: 'Original' },
   ]);
   assert.deepEqual(previews.map(({ cast }) => cast), [['Movie Actor'], ['Series Actor']]);
-  assert.match(previews[0].description, /^Streaming: 6 November 2026\n\nTMDB plot$/);
-  assert.match(previews[1].description, /TVDB plot$/);
+  assert.equal(previews[0].description, 'TMDB plot');
+  assert.equal(previews[1].description, 'TVDB plot');
   assert.equal(previews[0].imdbRating, undefined);
   assert.equal(urls.length, 5);
 });
@@ -70,7 +70,7 @@ test('provider overview preserves Cinemeta cast when provider credits are missin
       return Response.json({ overview: 'Provider overview', credits: { cast: [] } });
     },
   });
-  const [preview] = await enrich([{ type: 'movie', id: 'tt1234567', description: 'Streaming: 4 November 2026' }]);
+  const [preview] = await enrich([{ type: 'movie', id: 'tt1234567', description: 'Original synopsis.' }]);
   assert.match(preview.description, /Provider overview/);
   assert.deepEqual(preview.cast, ['Fallback Actor']);
 });
