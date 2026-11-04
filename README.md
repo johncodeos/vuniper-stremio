@@ -43,7 +43,7 @@ Only **Streaming Soon** has a date ribbon. New Shows & Seasons uses the latest s
 
 ### Fresh data when Stremio requests it
 
-- Each catalog request fetches the current Vuniper feed. There is no timed catalog cache or background refresh schedule.
+- Hosted catalogs share a five-minute snapshot. During a source outage, the add-on can serve a saved snapshot up to 24 hours old.
 - Catalog responses disable caching. Stremio controls when it requests a reload; resuming an already open app can temporarily preserve the existing view.
 - Streaming Soon posters include the date in their image URL, so a changed release date produces a new poster URL.
 - IMDb IDs preserve compatibility with Cinemeta and other add-ons.
@@ -156,6 +156,30 @@ The poster renderer uses [Sharp](https://sharp.pixelplumbing.com/) and an instal
 
 GitHub hosts this project's source code. Running the add-on on a public HTTPS host is a separate step.
 
+For personalized setup and persistent catalog snapshots, configure a writable systemd
+`StateDirectory=vuniper-stremio` and supply a 32-byte binary key as
+`LoadCredential=settings-encryption-key:/path/to/settings-encryption-key`.
+Generate it once with `openssl rand -out /path/to/settings-encryption-key 32` in a
+root-only directory, then restrict the file to mode `0600`. Keep the key with your
+protected backups so you can restore the encrypted settings. Outside systemd, set
+`STATE_DIRECTORY` to an existing private directory and `SETTINGS_KEY_FILE` to the key file.
+
+Optional systemd credentials:
+
+| Credential name | Contents |
+| --- | --- |
+| `settings-password` | Password for the legacy loopback-only admin page on port 7001 |
+| `catalog-proxy` | One authenticated proxy URL per line for Vuniper catalog requests |
+| `webshare-api-token` | Webshare API key for fetching replacement proxy endpoints on failure |
+
+Deploy from a specific Git commit in a clean release directory. Run `npm ci` and
+`npm test` there, then point the service's `WorkingDirectory` at that release.
+Keep the state directory and credentials outside the checkout. Back up both before
+deploying a version that migrates settings. Restart the service and check
+`/health`, all four catalog URLs, and `/health/catalogs` before retiring the
+previous release. Rolling back across the credential encryption migration
+requires restoring the matching pre-migration settings backup.
+
 ## Development
 
 ```sh
@@ -191,7 +215,8 @@ test/           Offline tests
 | `/catalog/movie/hidden-gems.json` | Hidden Gems |
 | `/catalog/series/new-shows-seasons.json` | New Shows & Seasons |
 | `/poster/v3/{date}/{source-id}.jpg` | Poster with a streaming date ribbon |
-| `/health` | Process health; does not query Vuniper |
+| `/health` | Process health without an upstream request |
+| `/health/catalogs` | Snapshot timestamps and freshness for each catalog. Returns 503 if any snapshot is stale or unavailable. |
 
 Catalogs return up to 100 entries per page. Append `/skip=100.json`, `/skip=200.json`, and subsequent offsets to the catalog path for additional pages—for example, `/catalog/movie/movies-now-online/skip=100.json`.
 
@@ -201,7 +226,12 @@ The integration uses Vuniper's internal website API. Now Streaming, Hidden Gems,
 
 Movie streaming catalogs use the `web` date. The series catalog uses `last_season_date`. Dates are displayed as calendar dates rather than precise release times. Incomplete records are omitted and counted in the server log, and duplicate IMDb IDs are removed within each catalog.
 
-Requests have a 20-second overall timeout and guarded pagination. A failed source request returns an uncached HTTP 502 so the next request can retry. Simultaneous requests for the same catalog page share a single fetch.
+Source requests have a 20-second overall timeout, a 2.5-second proxy attempt timeout,
+and guarded pagination. Persistent deployments share one in-flight refresh per catalog,
+reuse a fresh snapshot for five minutes, and serve the last successful snapshot for up
+to 24 hours if the source fails. The `X-Catalog-Fetched-At` and `X-Catalog-Stale`
+headers report which snapshot was served. A missing or expired snapshot still returns
+HTTP 502 during an outage. The snapshots refresh when users request the catalogs.
 
 Rendered posters use a bounded in-memory cache of 128 images for up to six hours. This image cache is separate from catalog freshness. Original posters are used directly for the other three rows. Legacy labeled poster URLs remain supported for cached clients.
 

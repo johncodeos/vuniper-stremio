@@ -44,6 +44,8 @@ button, .primary {
   display: inline-block; margin-top: .6rem; padding: .72rem 1.15rem; border: 0; border-radius: .7rem;
   background: #ffffff; color: #161616; font: inherit; font-weight: 750; text-decoration: none; cursor: pointer;
 }
+.secondary { margin-left: .55rem; padding: .32rem .65rem; font-size: .8rem; }
+button:disabled { opacity: .6; cursor: wait; }
 button:hover, .primary:hover { background: #eeeeee; }
 a { color: var(--accent); text-underline-offset: .18em; }
 :focus-visible { outline: 2px solid #dc6ef8; outline-offset: 3px; }

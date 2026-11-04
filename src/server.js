@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { findCatalog, CATALOG_PAGE_SIZE, createCatalogService, manifest } from './catalog.js';
+import { findCatalog, CATALOG_PAGE_SIZE, MAX_CATALOG_SKIP, createCatalogService, manifest } from './catalog.js';
 import { addPreviewLinks } from './metadata.js';
 import { createPosterService, datedPosterPath, parsePosterPath } from './posters.js';
 
@@ -61,6 +61,12 @@ export function createAddonServer({
         return;
       }
       if (pathname === '/health') { json(200, { ok: true }); return; }
+      if (pathname === '/health/catalogs') {
+        const catalogs = await service.getStatus();
+        const ok = catalogs.every(({ status }) => status === 'fresh');
+        json(ok ? 200 : 503, { ok, catalogs });
+        return;
+      }
 
       if (pathname.startsWith('/poster/')) {
         if (!parsePosterPath(pathname)) { json(404, { error: 'Not found.' }); return; }
@@ -81,9 +87,11 @@ export function createAddonServer({
           json(400, { error: 'skip must be a non-negative integer.' });
           return;
         }
-        const { entries, fetchedAt } = await service.getSnapshot(catalogId, skip + CATALOG_PAGE_SIZE);
+        if (skip > MAX_CATALOG_SKIP) { json(200, { metas: [] }); return; }
+        const { entries, fetchedAt, stale } = await service.getSnapshot(catalogId, skip + CATALOG_PAGE_SIZE);
         const origin = publicOrigin ?? `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`;
         res.setHeader('X-Catalog-Fetched-At', fetchedAt);
+        res.setHeader('X-Catalog-Stale', String(Boolean(stale)));
         const metas = entries.slice(skip, skip + CATALOG_PAGE_SIZE).map(({ meta, releaseDate, ribbon }) => ({
           ...meta,
           poster: ribbon ? new URL(datedPosterPath(meta.poster, releaseDate, ribbon), origin).href : meta.poster,

@@ -1,3 +1,5 @@
+import { readFile, rename, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { decode } from 'he';
 import { fetchItems } from './vuniper.js';
 
@@ -112,37 +114,105 @@ export function buildEntries(items, {
   });
 }
 
-export function createCatalogService({ loadItems = fetchItems, logger = console } = {}) {
+export const MAX_CATALOG_SKIP = 2000;
+const FRESH_MS = 5 * 60_000;
+const STALE_MS = 24 * 60 * 60_000;
+const RETRY_MS = 60_000;
+
+export function createCatalogService({ loadItems = fetchItems, logger = console, stateDirectory, now = Date.now } = {}) {
   const inFlight = new Map();
+  const snapshots = new Map();
+  const retryAt = new Map();
+
+  async function readSnapshot(id) {
+    if (snapshots.has(id)) return snapshots.get(id);
+    try {
+      const snapshot = JSON.parse(await readFile(join(stateDirectory, `catalog-${id}.json`), 'utf8'));
+      if (Array.isArray(snapshot.entries) && Number.isFinite(Date.parse(snapshot.fetchedAt))) {
+        if (!snapshots.has(id)) snapshots.set(id, snapshot);
+        return snapshots.get(id);
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') logger.warn(`Could not read ${id} snapshot.`);
+    }
+  }
+
+  async function refresh(catalog, targetCount) {
+    const items = await loadItems(catalog.section, {
+      mediaType: catalog.mediaType,
+      cursorField: catalog.dateField,
+      hasEnough: (items) => buildEntries(items, catalog).length >= targetCount,
+      maxPages: Number.isFinite(targetCount) ? Math.min(125, Math.max(25, Math.ceil(targetCount / 20) + 5)) : 25,
+    });
+    const entries = buildEntries(items, catalog);
+    if (items.length > 0 && entries.length === 0) {
+      throw new Error('Vuniper returned items without usable IMDb IDs or release dates.');
+    }
+    if (entries.length !== items.length) {
+      logger.warn(`Catalog: ${items.length - entries.length} duplicate or incomplete records omitted.`);
+    }
+    return { entries, fetchedAt: new Date(now()).toISOString(), complete: entries.length < targetCount };
+  }
+
+  function share(key, action) {
+    if (!inFlight.has(key)) {
+      inFlight.set(key, Promise.resolve().then(action).finally(() => inFlight.delete(key)));
+    }
+    return inFlight.get(key);
+  }
+
+  async function getCached(catalog, targetCount) {
+    const id = catalog.id;
+    const snapshot = await readSnapshot(id);
+    const usable = (value) => value && (value.complete || value.entries.length >= targetCount);
+    const age = snapshot ? now() - Date.parse(snapshot.fetchedAt) : Infinity;
+    if (usable(snapshot) && age < FRESH_MS) return snapshot;
+    if ((retryAt.get(id) ?? 0) > now()) {
+      if (usable(snapshot) && age < STALE_MS) return { ...snapshot, stale: true };
+      throw new Error(`Catalog ${id} refresh is cooling down.`);
+    }
+
+    try {
+      const next = await share(id, async () => {
+        const result = await refresh(catalog, targetCount);
+        snapshots.set(id, result);
+        retryAt.delete(id);
+        const path = join(stateDirectory, `catalog-${id}.json`);
+        try {
+          await writeFile(`${path}.tmp`, JSON.stringify(result), { mode: 0o600 });
+          await rename(`${path}.tmp`, path);
+        } catch {
+          logger.warn(`Could not persist ${id} snapshot.`);
+        }
+        return result;
+      });
+      // A concurrent request may have refreshed a shorter prefix.
+      return usable(next) ? next : getCached(catalog, targetCount);
+    } catch (error) {
+      retryAt.set(id, now() + RETRY_MS);
+      if (!usable(snapshot) || age >= STALE_MS) throw error;
+      logger.warn(`Catalog ${id} refresh failed. Serving the saved snapshot.`);
+      return { ...snapshot, stale: true };
+    }
+  }
+
   return {
     getSnapshot(catalogId = CATALOG_ID, minimumEntries = CATALOG_PAGE_SIZE) {
       const catalog = findCatalog(catalogId);
       if (!catalog) return Promise.reject(new Error('Unknown catalog.'));
-      // Fetch the prefix needed for this Stremio page in large feeds, rather
-      // than downloading their entire history or future release schedule.
       const targetCount = catalog.readAll ? Infinity : minimumEntries;
-      const key = `${catalogId}:${targetCount}`;
-      // Share simultaneous requests only. Once complete, the next request
-      // always fetches again; there is no saved or timed catalog cache.
-      if (!inFlight.has(key)) {
-        const request = Promise.resolve().then(() => loadItems(catalog.section, {
-          mediaType: catalog.mediaType,
-          cursorField: catalog.dateField,
-          hasEnough: (items) => buildEntries(items, catalog).length >= targetCount,
-          maxPages: Number.isFinite(targetCount) ? Math.max(25, Math.ceil(targetCount / 20) + 5) : 25,
-        })).then((items) => {
-          const entries = buildEntries(items, catalog);
-          if (items.length > 0 && entries.length === 0) {
-            throw new Error('Vuniper returned items without usable IMDb IDs or release dates.');
-          }
-          if (entries.length !== items.length) {
-            logger.warn(`Catalog: ${items.length - entries.length} duplicate or incomplete records omitted.`);
-          }
-          return { entries, fetchedAt: new Date().toISOString() };
-        }).finally(() => { inFlight.delete(key); });
-        inFlight.set(key, request);
-      }
-      return inFlight.get(key);
+      if (stateDirectory) return getCached(catalog, targetCount);
+      return share(`${catalogId}:${targetCount}`, () => refresh(catalog, targetCount));
+    },
+
+    async getStatus() {
+      return Promise.all(CATALOGS.map(async ({ id }) => {
+        const snapshot = stateDirectory && await readSnapshot(id);
+        const fetchedAt = snapshot?.fetchedAt ?? null;
+        const age = fetchedAt ? now() - Date.parse(fetchedAt) : Infinity;
+        const status = age < FRESH_MS ? 'fresh' : age < STALE_MS ? 'stale' : 'unavailable';
+        return { id, status, fetchedAt };
+      }));
     },
   };
 }

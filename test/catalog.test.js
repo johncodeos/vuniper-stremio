@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildEntries, createCatalogService, calendarDate, findCatalog } from '../src/catalog.js';
 
 const movie = (overrides = {}) => ({
@@ -134,4 +137,37 @@ test('keeps simultaneous categories isolated and counts usable movies toward eac
   assert.deepEqual(sections, ['soon', 'web', 'gems']);
   assert.deepEqual([soon, online, gems].map((data) => data.entries[0].meta.name), ['soon', 'web', 'gems']);
   await assert.rejects(service.getSnapshot('unknown'), /Unknown catalog/);
+});
+
+test('persistent catalog snapshots survive restart and expire after an upstream outage', async () => {
+  const stateDirectory = await mkdtemp(join(tmpdir(), 'vuniper-cache-'));
+  let now = Date.parse('2026-11-04T00:00:00Z');
+  let calls = 0;
+  let unavailable = false;
+  const loadItems = async () => {
+    calls++;
+    if (unavailable) throw new Error('Upstream unavailable');
+    return [movie()];
+  };
+  const options = { stateDirectory, now: () => now, loadItems, logger: quiet };
+  try {
+    const service = createCatalogService(options);
+    const first = await service.getSnapshot();
+    assert.deepEqual(await service.getSnapshot(), first);
+    assert.equal(calls, 1);
+
+    const restarted = createCatalogService(options);
+    assert.deepEqual(await restarted.getSnapshot(), first);
+    assert.equal(calls, 1);
+    now += 6 * 60_000;
+    unavailable = true;
+    assert.deepEqual(await restarted.getSnapshot(), { ...first, stale: true });
+    assert.equal((await restarted.getStatus()).find(({ id }) => id === 'streaming-soon').status, 'stale');
+    assert.deepEqual(await restarted.getSnapshot(), { ...first, stale: true });
+    assert.equal(calls, 2);
+    now += 24 * 60 * 60_000;
+    await assert.rejects(restarted.getSnapshot(), /Upstream unavailable/);
+  } finally {
+    await rm(stateDirectory, { recursive: true, force: true });
+  }
 });

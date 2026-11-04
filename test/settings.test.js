@@ -58,3 +58,19 @@ test('TMDB and TheTVDB enrich previews without replacing the Vuniper date or inv
   assert.equal(previews[0].imdbRating, undefined);
   assert.equal(urls.length, 5);
 });
+
+test('provider overview preserves Cinemeta cast when provider credits are missing', async () => {
+  const enrich = createMetadataService({
+    settings: { imdb: true, tmdbToken: 'test-tmdb-token' },
+    fetchImpl: async (url) => {
+      if (url.includes('cinemeta')) {
+        return Response.json({ meta: { id: 'tt1234567', type: 'movie', cast: ['Fallback Actor'] } });
+      }
+      if (url.includes('/find/')) return Response.json({ movie_results: [{ id: 42 }] });
+      return Response.json({ overview: 'Provider overview', credits: { cast: [] } });
+    },
+  });
+  const [preview] = await enrich([{ type: 'movie', id: 'tt1234567', description: 'Streaming: 4 November 2026' }]);
+  assert.match(preview.description, /Provider overview/);
+  assert.deepEqual(preview.cast, ['Fallback Actor']);
+});

@@ -1,3 +1,5 @@
+import { testProviderCredentials } from './providers.js';
+import { settingsScript, settingsScriptHash } from './settings-client.js';
 import { manifest } from './catalog.js';
 import { settingsStyle, settingsStyleHash } from './settings-style.js';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
@@ -36,17 +38,18 @@ function providerFields(settings = {}) {
     return page ? ` <a class="badge" href="${page[0]}" target="_blank" rel="noopener noreferrer">${page[1]}</a>` : '';
   };
   return Object.entries(fields).map(([name, label]) => `<div class="field"><label>${label} <span class="badge">(Optional)</span>
-    <input type="password" name="${name}" value="${settings[name] ?? ''}" autocomplete="off" maxlength="2048"></label>
-    ${settings[name] ? `Saved <label><input type="checkbox" name="clear-${name}"> Remove</label>` : ''}${keyLink(name)}</div>`)
+    <input type="password" name="${name}" autocomplete="new-password" maxlength="2048"></label>
+    ${settings[name] ? `Saved <label><input type="checkbox" name="clear-${name}"> Remove</label>` : ''}${keyLink(name)}
+    ${name === 'tvdbPin' ? '' : `<button class="secondary" type="button" data-test-provider="${name === 'tmdbToken' ? 'tmdb' : 'tvdb'}">Test ${name === 'tmdbToken' ? 'TMDB' : 'TheTVDB'} key</button>`}</div>`)
     .join('') + `<p><label class="choice"><input type="checkbox" name="imdb"${settings.imdb ? ' checked' : ''}>
-      Use Cinemeta for IMDb ratings and fallback credits</label></p>`;
+      Use Cinemeta for IMDb ratings and fallback credits</label></p><p role="status" data-test-status></p>`;
 }
 
-export function createAccounts(directory, publicUrl) {
+export function createAccounts(directory, publicUrl, { secrets, testCredentials = testProviderCredentials } = {}) {
   const origin = new URL(publicUrl).origin;
   const storage = join(directory, 'accounts');
   const file = (id) => join(storage, `${id}.json`);
-  async function read(id) {
+  async function readStored(id) {
     try { return JSON.parse(await readFile(file(id), 'utf8')); }
     catch (error) {
       if (error.code === 'ENOENT') return null;
@@ -54,6 +57,24 @@ export function createAccounts(directory, publicUrl) {
     }
   }
 
+  async function read(id) {
+    const account = await readStored(id);
+    if (!account?.providerSecrets) return account;
+    return { ...account, settings: secrets.open(account.providerSecrets, id) };
+  }
+
+  async function write(id, { settings, ...account }) {
+    const record = secrets ? { ...account, providerSecrets: secrets.seal(settings, id) } : { ...account, settings };
+    const temp = join(storage, `${random()}.tmp`);
+    try {
+      await writeFile(temp, JSON.stringify(record), { mode: 0o600, flag: 'wx' });
+      await rename(temp, file(id));
+    } finally {
+      await unlink(temp).catch(() => {});
+    }
+  }
+
+  const updates = new Set();
   const attempts = new Map();
   let pending = 0;
   function allow(key, maximum) {
@@ -72,7 +93,7 @@ export function createAccounts(directory, publicUrl) {
       <title>${heading} · Vuniper</title><style>${settingsStyle}</style>
       <main><header><div class="brand"><img class="mark" src="${manifest.logo}" alt="" width="38" height="38"> Vuniper</div>
       <p class="kicker">STREMIO ADD-ON</p><h1>${heading}</h1>${subtitle ? `<p>${subtitle}</p>` : ''}</header>
-      <div class="panel">${content}</div><footer>Unofficial Vuniper add-on for Stremio.</footer></main></html>`);
+      <div class="panel">${content}</div><footer>Unofficial Vuniper add-on for Stremio.</footer></main><script>${settingsScript}</script></html>`);
   }
 
   function links(res, id, account, saved = false) {
@@ -86,13 +107,26 @@ export function createAccounts(directory, publicUrl) {
   }
 
   return {
+    async migrate() {
+      if (!secrets) return;
+      await mkdir(storage, { recursive: true, mode: 0o700 });
+      for (const entry of await readdir(storage)) {
+        if (!new RegExp(`^${idPattern}\\.json$`).test(entry)) continue;
+        const id = entry.slice(0, -5);
+        const account = await readStored(id);
+        if (account?.providerSecrets) secrets.open(account.providerSecrets, id);
+        else if (account?.settings) await write(id, account);
+      }
+    },
+
     async resolve(path) {
       const match = new RegExp(`^/install/(${idPattern})/(${idPattern})(/.*)$`).exec(path);
       if (!match) return null;
       const [, id, token, pathname] = match;
-      const account = await read(id);
+      const account = await readStored(id);
       if (!account || !timingSafeEqual(Buffer.from(token), Buffer.from(account.token))) return null;
-      return { id, pathname, settings: account.settings, revision: account.revision };
+      const settings = account.providerSecrets ? secrets.open(account.providerSecrets, id) : account.settings;
+      return { id, pathname, settings, revision: account.revision };
     },
 
     async handle(req, res, pathname) {
@@ -106,7 +140,7 @@ export function createAccounts(directory, publicUrl) {
       for (const header of ['Access-Control-Allow-Origin', 'Access-Control-Allow-Methods', 'Access-Control-Allow-Headers']) {
         res.removeHeader(header);
       }
-      res.setHeader('Content-Security-Policy', `default-src 'none'; style-src 'sha256-${settingsStyleHash}'; img-src ${new URL(manifest.logo).origin}; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
+      res.setHeader('Content-Security-Policy', `default-src 'none'; style-src 'sha256-${settingsStyleHash}'; img-src ${new URL(manifest.logo).origin}; script-src 'sha256-${settingsScriptHash}'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
       res.setHeader('Referrer-Policy', 'same-origin');
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cache-Control', 'no-store');
@@ -138,20 +172,32 @@ export function createAccounts(directory, publicUrl) {
       }
       const form = new URLSearchParams(body);
       const password = form.get('password') ?? '';
-      if (password.length < 12 || password.length > 128) {
-        page(res, 400, '<p>Password must be 12 to 128 characters. Go back and try again.</p>');
+      const provider = form.get('test');
+      const testing = provider === 'tmdb' || provider === 'tvdb';
+      const testReply = (status, message) => res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
+        .end(JSON.stringify({ message }));
+      if ((!testing || manage) && (password.length < 12 || password.length > 128)) {
+        if (testing) testReply(400, 'Enter your settings password to test credentials.');
+        else page(res, 400, '<p>Password must be 12 to 128 characters. Go back and try again.</p>');
         return true;
       }
       const id = manage?.[1] ?? random();
-      if (!allow(manage ? id : 'registration', manage ? 8 : 20)) {
+      const attemptKey = testing ? `provider-test:${manage ? id : 'registration'}` : manage ? id : 'registration';
+      if (!allow(attemptKey, manage ? 8 : 20)) {
         res.setHeader('Retry-After', '600');
-        page(res, 429, '<p>Too many attempts. Try again later.</p>');
+        if (testing) testReply(429, 'Too many attempts. Try again later.');
+        else page(res, 429, '<p>Too many attempts. Try again later.</p>');
         return true;
       }
       pending++;
       try {
         if (!manage) {
           const settings = providerSettings(form);
+          if (testing) {
+            if (!settings) testReply(400, 'Invalid credential format.');
+            else testReply(200, await testCredentials(provider, settings));
+            return true;
+          }
           if (!settings) { page(res, 400, '<p>Invalid credential format.</p>'); return true; }
           await mkdir(storage, { recursive: true, mode: 0o700 });
           if ((await readdir(storage)).length >= 1000) {
@@ -161,33 +207,54 @@ export function createAccounts(directory, publicUrl) {
           const salt = random();
           const hash = (await derive(password, salt, 64)).toString('hex');
           const account = { salt, hash, token: random(), revision: random(), settings };
-          await writeFile(file(id), JSON.stringify(account), { mode: 0o600, flag: 'wx' });
+          await write(id, account);
           links(res, id, account);
           return true;
         }
         const account = await read(id);
         const hash = await derive(password, account?.salt ?? id, 64);
         if (!account || !timingSafeEqual(hash, Buffer.from(account.hash, 'hex'))) {
-          page(res, 401, '<p>Invalid password or settings link. Go back and try again.</p>');
+          if (testing) testReply(401, 'Invalid settings password.');
+          else page(res, 401, '<p>Invalid password or settings link. Go back and try again.</p>');
           return true;
         }
-        attempts.delete(id);
-        if (!form.has('save')) {
+        if (!testing) attempts.delete(id);
+        if (testing) {
+          const settings = providerSettings(form, account.settings);
+          if (!settings) testReply(400, 'Invalid credential format.');
+          else testReply(200, await testCredentials(provider, settings));
+          return true;
+        }
+        if (!form.has('save') && !form.has('rotate')) {
           page(res, 200, `<form method="post"><section><h2>Metadata providers</h2>${providerFields(account.settings)}</section>
             <section><h2>Confirm changes</h2>${passwordField(false)}
-            <button name="save" value="1">Save settings</button></section></form>`, 'Edit Vuniper settings',
+            <input type="hidden" name="revision" value="${account.revision}">
+            <button name="save" value="1">Save settings</button></section>
+            <section><h2>Replace install link</h2><p class="hint">This revokes the current link. Install the new link in Stremio.</p>
+            <button class="secondary" name="rotate" value="1">Replace install link</button></section></form>`, 'Edit Vuniper settings',
             'Changes apply to your existing Stremio installation.');
           return true;
         }
-        const settings = providerSettings(form, account.settings);
-        if (!settings) { page(res, 400, '<p>Invalid credential format.</p>'); return true; }
-        const next = { ...account, settings, revision: random() };
-        const temp = join(storage, `${random()}.tmp`);
+        if (updates.has(id)) {
+          page(res, 409, '<p>Settings are being updated. Reopen Configure and try again.</p>');
+          return true;
+        }
+        updates.add(id);
         try {
-          await writeFile(temp, JSON.stringify(next), { mode: 0o600, flag: 'wx' });
-          await rename(temp, file(id));
-        } finally { await unlink(temp).catch(() => {}); }
-        links(res, id, next, true);
+          const current = await read(id);
+          if (current.revision !== form.get('revision')) {
+            page(res, 409, '<p>Settings changed. Reopen Configure and try again.</p>');
+            return true;
+          }
+          const rotating = form.has('rotate');
+          const settings = rotating ? current.settings : providerSettings(form, current.settings);
+          if (!settings) { page(res, 400, '<p>Invalid credential format.</p>'); return true; }
+          const next = { ...current, settings, revision: random(), token: rotating ? random() : current.token };
+          await write(id, next);
+          links(res, id, next, true);
+        } finally {
+          updates.delete(id);
+        }
       } finally { pending--; }
       return true;
     },

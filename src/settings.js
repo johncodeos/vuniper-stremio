@@ -5,19 +5,26 @@ import { join } from 'node:path';
 
 const digest = (value) => createHash('sha256').update(value).digest();
 
-export function createSettings(directory) {
+export function createSettings(directory, secrets) {
   const file = join(directory, 'providers.json');
+  function persist(next) {
+    const record = secrets ? { providerSecrets: secrets.seal(next, 'shared') } : next;
+    writeFileSync(`${file}.tmp`, JSON.stringify(record), { mode: 0o600 });
+    renameSync(`${file}.tmp`, file);
+  }
+
   let current = { imdb: false };
   try {
-    current = JSON.parse(readFileSync(file, 'utf8'));
+    const stored = JSON.parse(readFileSync(file, 'utf8'));
+    current = stored.providerSecrets ? secrets.open(stored.providerSecrets, 'shared') : stored;
+    if (secrets && !stored.providerSecrets) persist(current);
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
   return {
     get: () => current,
     save(next) {
-      writeFileSync(`${file}.tmp`, JSON.stringify(next), { mode: 0o600 });
-      renameSync(`${file}.tmp`, file);
+      persist(next);
       current = next;
     },
   };

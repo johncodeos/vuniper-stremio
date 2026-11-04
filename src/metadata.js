@@ -49,6 +49,7 @@ export function createMetadataService({ fetchImpl = fetch, settings = { imdb: tr
 
     const request = (async () => {
       const signal = AbortSignal.timeout(2000);
+      const providerEnabled = type === 'movie' ? settings.tmdbToken : settings.tvdbKey;
       const providerRequest = lookupProvider({ type, id }, signal).catch(() => undefined);
       let details;
       try {
@@ -67,14 +68,19 @@ export function createMetadataService({ fetchImpl = fetch, settings = { imdb: tr
         // A metadata failure should still leave the Vuniper catalog usable.
       }
       const provider = await providerRequest;
+      const complete = (!settings.imdb || details) && (!providerEnabled || provider);
       if (provider) {
+        const cast = names(provider.cast);
+        const director = names(provider.director);
         details = {
-          ...details, overview: provider.overview,
-          cast: names(provider.cast), director: names(provider.director),
+          ...details,
+          overview: provider.overview,
+          cast: cast.length ? cast : details?.cast,
+          director: director.length ? director : details?.director,
         };
       }
       cache.delete(key);
-      cache.set(key, { details, expires: Date.now() + (details ? CACHE_TTL : RETRY_TTL) });
+      cache.set(key, { details, expires: Date.now() + (complete ? CACHE_TTL : RETRY_TTL) });
       if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value);
       return details;
     })().finally(() => inFlight.delete(key));
